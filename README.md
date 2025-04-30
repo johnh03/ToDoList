@@ -17,4 +17,4 @@ A desktop to-do checklist app with time zone support, subtasks, tags, persistent
 
 ```bash
 git clone https://github.com/johnh03/ToDoList.git
-cd todo-checklist-app
+cd ToDoList
