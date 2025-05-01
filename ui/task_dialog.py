@@ -1,55 +1,62 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QDialogButtonBox, QLabel, QDateEdit, QTimeEdit, QCheckBox
-from PyQt5.QtCore import QDate, QTime
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QComboBox, QTimeEdit, QCheckBox, QDialogButtonBox, QTextEdit
+from PyQt5.QtCore import QTime
+from datetime import datetime
 
 class TaskDialog(QDialog):
     def __init__(self, task_manager):
         super().__init__()
-        self.task_manager = task_manager
         self.setWindowTitle("Add Task")
+        self.task_manager = task_manager
 
-        self.layout = QVBoxLayout()
+        layout = QVBoxLayout()
 
         self.title_input = QLineEdit()
-        self.layout.addWidget(QLabel("Task Title:"))
-        self.layout.addWidget(self.title_input)
+        layout.addWidget(QLabel("Task Title:"))
+        layout.addWidget(self.title_input)
 
-        self.date_input = QDateEdit()
-        self.date_input.setCalendarPopup(True)
-        self.date_input.setDate(QDate.currentDate())
-        self.layout.addWidget(QLabel("Due Date:"))
-        self.layout.addWidget(self.date_input)
+        self.start_input = QTimeEdit()
+        self.start_input.setTime(QTime.currentTime())
+        layout.addWidget(QLabel("Start Time:"))
+        layout.addWidget(self.start_input)
 
-        self.start_time = QTimeEdit()
-        self.start_time.setTime(QTime.currentTime())
-        self.end_time = QTimeEdit()
-        self.end_time.setTime(QTime.currentTime().addSecs(3600))
-        self.layout.addWidget(QLabel("Start Time:"))
-        self.layout.addWidget(self.start_time)
-        self.layout.addWidget(QLabel("End Time:"))
-        self.layout.addWidget(self.end_time)
+        self.end_input = QTimeEdit()
+        self.end_input.setTime(QTime.currentTime().addSecs(3600))
+        layout.addWidget(QLabel("End Time:"))
+        layout.addWidget(self.end_input)
 
         self.tag_input = QLineEdit()
-        self.layout.addWidget(QLabel("Custom Tag:"))
-        self.layout.addWidget(self.tag_input)
+        layout.addWidget(QLabel("Task Tag (e.g., Work, Chores, etc.):"))
+        layout.addWidget(self.tag_input)
 
-        self.repeat_checkbox = QCheckBox("Repeat Weekly on this Day")
-        self.layout.addWidget(self.repeat_checkbox)
+        self.description_input = QTextEdit()
+        layout.addWidget(QLabel("Task Description:"))
+        layout.addWidget(self.description_input)
 
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.accepted.connect(self.add_task)
-        self.buttons.rejected.connect(self.reject)
-        self.layout.addWidget(self.buttons)
+        self.repeat_checkbox = QCheckBox("Repeat Weekly")
+        layout.addWidget(self.repeat_checkbox)
 
-        self.setLayout(self.layout)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
 
-    def add_task(self):
-        title = self.title_input.text()
-        date = self.date_input.date().toString("yyyy-MM-dd")
-        tag = self.tag_input.text() or "General"
-        start = self.start_time.time().toString("HH:mm")
-        end = self.end_time.time().toString("HH:mm")
-        repeat = self.repeat_checkbox.isChecked()
+        self.setLayout(layout)
 
-        if title:
-            self.task_manager.add_task(title, date, tag, start, end, repeat)
-        self.accept()
+    def accept(self):
+        title = self.title_input.text().strip()
+        if not title:
+            return
+
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        self.task_manager.add_task(
+    title,
+    today,
+    self.tag_input.text().strip() or "General",
+    self.start_input.time().toString("HH:mm"),
+    self.end_input.time().toString("HH:mm"),
+    self.repeat_checkbox.isChecked(),
+    self.description_input.toPlainText().strip()
+)
+
+        super().accept()

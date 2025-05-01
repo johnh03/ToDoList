@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QCalendarWidget, 
 from PyQt5.QtCore import QDate, Qt
 from ui.task_dialog import TaskDialog
 from logic.task_manager import TaskManager
+from ui.task_detail_dialog import TaskDetailDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -34,6 +35,7 @@ class MainWindow(QMainWindow):
         self.calendar.paintCell = self.paint_calendar_cell
 
         self.task_list = QListWidget()
+        self.task_list.itemDoubleClicked.connect(self.show_task_details)
 
         self.add_task_button = QPushButton("Add Task")
         self.add_task_button.clicked.connect(self.open_task_dialog)
@@ -62,16 +64,24 @@ class MainWindow(QMainWindow):
 
         self.tag_filter = QComboBox()
         self.tag_filter.addItem("All Tags")
-        self.tag_filter.addItems(sorted(set([t['tag'] for t in self.task_manager.tasks])))
+        self.update_tag_filter()
         self.tag_filter.currentIndexChanged.connect(self.load_completed_tasks)
 
         self.history_list = QListWidget()
+        self.history_list.itemDoubleClicked.connect(self.show_completed_task_details)
 
         self.history_layout.addWidget(QLabel("Completed Tasks:"))
         self.history_layout.addWidget(self.history_filter_input)
         self.history_layout.addWidget(self.tag_filter)
         self.history_layout.addWidget(self.history_list)
         self.load_completed_tasks()
+
+    def update_tag_filter(self):
+        self.tag_filter.clear()
+        self.tag_filter.addItem("All Tags")
+        completed_tasks = self.task_manager.get_completed_tasks()
+        tags = sorted(set([t['tag'] for t in completed_tasks]))
+        self.tag_filter.addItems(tags)
 
     def load_tasks_for_selected_date(self, date):
         self.task_list.clear()
@@ -80,8 +90,9 @@ class MainWindow(QMainWindow):
         self.current_date = date_str
         tasks = self.task_manager.get_tasks_by_date(date_str)
         for task in tasks:
-            if not task.get("complete"):
+            if (not task.get("repeat") and not task.get("complete")) or (task.get("repeat") and date_str not in task.get("completed_dates", [])):
                 item = QListWidgetItem(f"[{task['tag']}] {task['title']} ({task['start']} - {task['end']})")
+                item.setToolTip(task.get("description", ""))
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
                 self.task_list.addItem(item)
@@ -93,6 +104,7 @@ class MainWindow(QMainWindow):
             self.load_tasks_for_selected_date(self.calendar.selectedDate())
             self.calendar.update()
             self.load_completed_tasks()
+            self.update_tag_filter()
 
     def mark_complete(self, item):
         text = item.text()
@@ -105,6 +117,7 @@ class MainWindow(QMainWindow):
         self.task_list.takeItem(self.task_list.row(item))
         self.calendar.update()
         self.load_completed_tasks()
+        self.update_tag_filter()
 
     def delete_selected_task(self):
         selected = self.task_list.currentItem()
@@ -120,15 +133,43 @@ class MainWindow(QMainWindow):
         selected_tag = self.tag_filter.currentText()
         for task in self.task_manager.get_completed_tasks():
             if (keyword in task['title'].lower()) and (selected_tag == "All Tags" or task['tag'] == selected_tag):
-                self.history_list.addItem(f"{task['due']} - {task['title']} [{task['tag']}] ({task['start']} - {task['end']})")
+                item = QListWidgetItem(f"{task['due']} - {task['title']} [{task['tag']}] ({task['start']} - {task['end']})")
+                item.setToolTip(task.get("description", ""))
+                self.history_list.addItem(item)
 
     def paint_calendar_cell(self, painter, rect, date):
         from PyQt5.QtGui import QColor, QBrush
         QCalendarWidget.paintCell(self.calendar, painter, rect, date)
         date_str = date.toString("yyyy-MM-dd")
         tasks = self.task_manager.get_tasks_by_date(date_str)
-        if any(not t.get("complete") for t in tasks):
+        if any((not t.get("repeat") and not t.get("complete")) or (t.get("repeat") and date_str not in t.get("completed_dates", [])) for t in tasks):
             painter.save()
             painter.setBrush(QBrush(QColor(200, 230, 201, 150)))
             painter.drawRect(rect)
             painter.restore()
+
+    def show_task_details(self, item):
+        text = item.text()
+        if not text:
+            return
+        title = text.split(']')[1].split('(')[0].strip()
+        date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        for task in self.task_manager.get_tasks_by_date(date):
+            if task['title'] == title:
+                detail_dialog = TaskDetailDialog(task, self)
+                if detail_dialog.exec_():
+                    task['description'] = detail_dialog.get_description()
+                    self.task_manager.save_tasks()
+                    item.setToolTip(task.get("description", ""))
+                break
+
+    def show_completed_task_details(self, item):
+        text = item.text()
+        if not text:
+            return
+        title_part = text.split(' - ')[1].split(' [')[0].strip()
+        for task in self.task_manager.get_completed_tasks():
+            if task['title'] == title_part:
+                detail_dialog = TaskDetailDialog(task, self)
+                detail_dialog.exec_()
+                break
