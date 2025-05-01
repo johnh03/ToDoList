@@ -8,7 +8,7 @@ class TaskManager:
     def __init__(self):
         self.tasks = self.load_tasks()
 
-    def add_task(self, title, date_str, tag, start, end, repeat):
+    def add_task(self, title, date_str, tag, start, end, repeat, description=""):
         task = {
             "title": title,
             "due": date_str,
@@ -16,7 +16,9 @@ class TaskManager:
             "start": start,
             "end": end,
             "repeat": repeat,
-            "complete": False
+            "complete": False,
+            "completed_dates": [],
+            "description": description
         }
         self.tasks.append(task)
         self.save_tasks()
@@ -28,16 +30,29 @@ class TaskManager:
         return matched
 
     def get_completed_tasks(self):
-        return [t for t in self.tasks if t.get("complete")]
+        completed = []
+        for t in self.tasks:
+            if t.get("repeat"):
+                for d in t.get("completed_dates", []):
+                    completed.append({**t, "due": d})
+            elif t.get("complete"):
+                completed.append(t)
+        return completed
 
     def set_task_completion(self, date_str, title, is_complete):
         for task in self.tasks:
-            if (task["due"] == date_str or (task.get("repeat") and datetime.strptime(task["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())) and task["title"] == title:
-                task["complete"] = is_complete
+            if task["title"] == title and (task["due"] == date_str or (task.get("repeat") and datetime.strptime(task["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())):
+                if task.get("repeat"):
+                    if "completed_dates" not in task:
+                        task["completed_dates"] = []
+                    if is_complete and date_str not in task["completed_dates"]:
+                        task["completed_dates"].append(date_str)
+                else:
+                    task["complete"] = is_complete
                 break
 
     def delete_task(self, date_str, title):
-        self.tasks = [t for t in self.tasks if not ((t["due"] == date_str or (t.get("repeat") and datetime.strptime(t["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())) and t["title"] == title)]
+        self.tasks = [t for t in self.tasks if not (t["title"] == title and (t["due"] == date_str or (t.get("repeat") and datetime.strptime(t["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())))]
         self.save_tasks()
 
     def load_tasks(self):
