@@ -1,66 +1,73 @@
 import json
-from os.path import exists
+import os
 from datetime import datetime
 
-SAVE_FILE = "tasks.json"
-
 class TaskManager:
-    def __init__(self):
-        self.tasks = self.load_tasks()
+    def __init__(self, filename='tasks.json'):
+        self.filename = filename
+        self.tasks = {}
+        self.load_tasks()
 
-    def add_task(self, title, date_str, tag, start, end, repeat, description=""):
+    def load_tasks(self):
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as f:
+                self.tasks = json.load(f)
+        else:
+            self.tasks = {}
+
+    def save_tasks(self):
+        with open(self.filename, 'w') as f:
+            json.dump(self.tasks, f, indent=4)
+
+    def add_task(self, title, due_date, tag, description, repeat=False):
         task = {
-            "title": title,
-            "due": date_str,
-            "tag": tag,
-            "start": start,
-            "end": end,
-            "repeat": repeat,
-            "complete": False,
-            "completed_dates": [],
-            "description": description
+            'title': title,
+            'description': description,
+            'tag': tag,
+            'repeat': repeat,
+            'complete': False,
+            'due': due_date,
+            'start': '',
+            'end': '',
+            'completed_dates': []
         }
-        self.tasks.append(task)
+        if due_date not in self.tasks:
+            self.tasks[due_date] = []
+        self.tasks[due_date].append(task)
         self.save_tasks()
 
-    def get_tasks_by_date(self, date_str):
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        weekday = date_obj.weekday()
-        matched = [t for t in self.tasks if (t["due"] == date_str or (t.get("repeat") and datetime.strptime(t["due"], "%Y-%m-%d").weekday() == weekday))]
-        return matched
+    def get_tasks_by_date(self, date):
+        return self.tasks.get(date, [])
+
+    def set_task_completion(self, date, title, complete):
+        if date in self.tasks:
+            for task in self.tasks[date]:
+                if task['title'] == title:
+                    task['complete'] = complete
+                    if complete and task['repeat']:
+                        if 'completed_dates' not in task:
+                            task['completed_dates'] = []
+                        task['completed_dates'].append(date)
+                    break
+        self.save_tasks()
+
+    def delete_task(self, date, title):
+        if date in self.tasks:
+            self.tasks[date] = [task for task in self.tasks[date] if task['title'] != title]
+            if not self.tasks[date]:
+                del self.tasks[date]
+            self.save_tasks()
 
     def get_completed_tasks(self):
         completed = []
-        for t in self.tasks:
-            if t.get("repeat"):
-                for d in t.get("completed_dates", []):
-                    completed.append({**t, "due": d})
-            elif t.get("complete"):
-                completed.append(t)
+        for date, task_list in self.tasks.items():
+            for task in task_list:
+                if task['repeat'] and date in task.get('completed_dates', []):
+                    task_copy = task.copy()
+                    task_copy['due'] = date
+                    completed.append(task_copy)
+                elif not task['repeat'] and task['complete']:
+                    task_copy = task.copy()
+                    task_copy['due'] = date
+                    completed.append(task_copy)
         return completed
-
-    def set_task_completion(self, date_str, title, is_complete):
-        for task in self.tasks:
-            if task["title"] == title and (task["due"] == date_str or (task.get("repeat") and datetime.strptime(task["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())):
-                if task.get("repeat"):
-                    if "completed_dates" not in task:
-                        task["completed_dates"] = []
-                    if is_complete and date_str not in task["completed_dates"]:
-                        task["completed_dates"].append(date_str)
-                else:
-                    task["complete"] = is_complete
-                break
-
-    def delete_task(self, date_str, title):
-        self.tasks = [t for t in self.tasks if not (t["title"] == title and (t["due"] == date_str or (t.get("repeat") and datetime.strptime(t["due"], "%Y-%m-%d").weekday() == datetime.strptime(date_str, "%Y-%m-%d").weekday())))]
-        self.save_tasks()
-
-    def load_tasks(self):
-        if not exists(SAVE_FILE):
-            return []
-        with open(SAVE_FILE, 'r') as f:
-            return json.load(f)
-
-    def save_tasks(self):
-        with open(SAVE_FILE, 'w') as f:
-            json.dump(self.tasks, f, indent=2)

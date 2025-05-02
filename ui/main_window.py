@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.tag_filter.currentIndexChanged.connect(self.load_completed_tasks)
 
         self.history_list = QListWidget()
-        self.history_list.itemDoubleClicked.connect(self.show_completed_task_details)
+        self.history_list.itemDoubleClicked.connect(self.show_task_details_from_history)
 
         self.history_layout.addWidget(QLabel("Completed Tasks:"))
         self.history_layout.addWidget(self.history_filter_input)
@@ -91,7 +91,9 @@ class MainWindow(QMainWindow):
         tasks = self.task_manager.get_tasks_by_date(date_str)
         for task in tasks:
             if (not task.get("repeat") and not task.get("complete")) or (task.get("repeat") and date_str not in task.get("completed_dates", [])):
-                item = QListWidgetItem(f"[{task['tag']}] {task['title']} ({task['start']} - {task['end']})")
+                start = task.get('start', 'N/A')
+                end = task.get('end', 'N/A')
+                item = QListWidgetItem(f"[{task['tag']}] {task['title']} ({start} - {end})")
                 item.setToolTip(task.get("description", ""))
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
@@ -99,7 +101,8 @@ class MainWindow(QMainWindow):
         self.task_list.itemChanged.connect(self.mark_complete)
 
     def open_task_dialog(self):
-        dialog = TaskDialog(self.task_manager)
+        selected_date = self.calendar.selectedDate()
+        dialog = TaskDialog(self.task_manager, selected_date)
         if dialog.exec_():
             self.load_tasks_for_selected_date(self.calendar.selectedDate())
             self.calendar.update()
@@ -133,7 +136,9 @@ class MainWindow(QMainWindow):
         selected_tag = self.tag_filter.currentText()
         for task in self.task_manager.get_completed_tasks():
             if (keyword in task['title'].lower()) and (selected_tag == "All Tags" or task['tag'] == selected_tag):
-                item = QListWidgetItem(f"{task['due']} - {task['title']} [{task['tag']}] ({task['start']} - {task['end']})")
+                start = task.get('start', 'N/A')
+                end = task.get('end', 'N/A')
+                item = QListWidgetItem(f"{task['due']} - {task['title']} [{task['tag']}] ({start} - {end})")
                 item.setToolTip(task.get("description", ""))
                 self.history_list.addItem(item)
 
@@ -163,13 +168,13 @@ class MainWindow(QMainWindow):
                     item.setToolTip(task.get("description", ""))
                 break
 
-    def show_completed_task_details(self, item):
+    def show_task_details_from_history(self, item):
         text = item.text()
         if not text:
             return
-        title_part = text.split(' - ')[1].split(' [')[0].strip()
+        title = text.split('-')[1].split('[')[0].strip()
         for task in self.task_manager.get_completed_tasks():
-            if task['title'] == title_part:
+            if task['title'] == title:
                 detail_dialog = TaskDetailDialog(task, self)
                 detail_dialog.exec_()
                 break
